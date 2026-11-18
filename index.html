@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SOS.AI — Emergency Hand Signal Recognition System</title>
+
+  <!-- Google Fonts: Plus Jakarta Sans, Inter, and JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- TensorFlow.js & Teachable Machine Image Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <!-- Tailwind Configuration & Custom Theme Tokens -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            navy: {
+              950: '#070D19',
+              900: '#0D1627',
+              800: '#132038',
+              700: '#1E2F4F',
+            },
+            emergency: '#EF4444',
+            warning: '#F59E0B',
+            safe: '#10B981',
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'scanline': 'scanline 3.5s linear infinite',
+          },
+          keyframes: {
+            scanline: {
+              '0%': { transform: 'translateY(-100%)' },
+              '100%': { transform: 'translateY(400%)' },
+            }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    /* Custom Glassmorphism & Telemetry Scrollbar */
+    body {
+      background-color: #070D19;
+      color: #f8fafc;
+      background-image:
+        radial-gradient(circle at 15% 15%, rgba(239, 68, 68, 0.09) 0%, transparent 42%),
+        radial-gradient(circle at 85% 20%, rgba(16, 185, 129, 0.07) 0%, transparent 42%),
+        linear-gradient(to bottom, rgba(13, 22, 39, 0.55), rgba(7, 13, 25, 1));
+    }
+
+    .glass-card {
+      background: rgba(13, 22, 39, 0.78);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .glass-panel {
+      background: rgba(19, 32, 56, 0.65);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+
+    /* Subtle tactical grid pattern */
+    .tactical-grid {
+      background-size: 32px 32px;
+      background-image:
+        linear-gradient(to right, rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+    }
+
+    /* Progress bar smooth transition */
+    .progress-fill {
+      transition: width 0.25s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.25s ease;
+    }
+
+    /* Active Gesture Card Glow States */
+    .card-active-red {
+      border-color: #EF4444 !important;
+      box-shadow: 0 0 28px rgba(239, 68, 68, 0.38), inset 0 0 18px rgba(239, 68, 68, 0.14);
+      transform: translateY(-4px);
+    }
+    .card-active-orange {
+      border-color: #F59E0B !important;
+      box-shadow: 0 0 28px rgba(245, 158, 11, 0.38), inset 0 0 18px rgba(245, 158, 11, 0.14);
+      transform: translateY(-4px);
+    }
+    .card-active-green {
+      border-color: #10B981 !important;
+      box-shadow: 0 0 28px rgba(16, 185, 129, 0.38), inset 0 0 18px rgba(16, 185, 129, 0.14);
+      transform: translateY(-4px);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #070D19;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #132038;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #1E2F4F;
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-red-500/30 selection:text-white">
+
+  <!-- ==================== STICKY NAVIGATION BAR ==================== -->
+  <header class="sticky top-0 z-50 glass-card border-b border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-3">
+        <!-- Brand Logo -->
+        <a href="#" class="flex items-center gap-3 group shrink-0">
+          <div class="relative flex items-center justify-center w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/40 text-red-400 group-hover:bg-red-500/25 transition">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19H19a2 2 0 001.75-2.97l-6.93-12a2 2 0 00-3.5 0l-6.93 12A2 2 0 005.07 19z" />
+            </svg>
+            <span class="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+            </span>
+          </div>
+          <div>
+            <span class="font-display font-extrabold text-lg tracking-tight text-white">SOS<span class="text-red-500">.AI</span></span>
+            <span class="hidden xl:inline-block ml-2 text-xs font-mono uppercase tracking-widest text-slate-400 border-l border-slate-700 pl-2">Emergency Vision</span>
+          </div>
+        </a>
+
+        <!-- Desktop Navigation Links -->
+        <nav class="hidden lg:flex items-center gap-6 text-sm font-medium text-slate-300">
+          <a href="#dashboard" class="hover:text-white transition">Live Detector</a>
+          <a href="#gestures" class="hover:text-white transition">Gesture Classes</a>
+          <a href="#impact" class="hover:text-white transition">Community Impact</a>
+          <a href="#how-it-works" class="hover:text-white transition">How It Works</a>
+        </nav>
+
+        <!-- Right Controls: Model Status, Copy GitHub Pages HTML Button & Mobile Menu -->
+        <div class="flex items-center gap-2.5">
+          <!-- Model Status Pill -->
+          <div id="nav-status-pill" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-navy-900 border border-slate-700/80 text-xs font-mono">
+            <span id="nav-status-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span id="nav-status-text" class="text-slate-300">INITIALIZING AI</span>
+          </div>
+
+          <!-- Copy Single-File HTML Button for GitHub Pages -->
+          <button id="btn-copy-html" onclick="copySingleFileHTML()" title="Copy complete index.html code for GitHub Pages" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-navy-800 hover:bg-navy-700 border border-slate-700 text-xs font-mono font-semibold text-slate-200 transition">
+            <svg id="copy-icon" class="w-3.5 h-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <span id="copy-btn-text">Copy HTML</span>
+          </button>
+
+          <!-- Mobile Hamburger Button -->
+          <button id="mobile-menu-btn" aria-label="Toggle Menu" class="lg:hidden p-2 rounded-xl bg-navy-800 border border-slate-700 text-slate-300 hover:text-white focus:outline-none">
+            <svg id="menu-icon-open" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <svg id="menu-icon-close" class="w-5 h-5 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mobile Dropdown Navigation -->
+    <div id="mobile-menu" class="hidden lg:hidden border-t border-slate-800 bg-navy-950/95 px-4 pt-3 pb-4 space-y-2">
+      <a href="#dashboard" class="mobile-nav-link block px-3 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-navy-800">Live Detector</a>
+      <a href="#gestures" class="mobile-nav-link block px-3 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-navy-800">Gesture Classes</a>
+      <a href="#impact" class="mobile-nav-link block px-3 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-navy-800">Community Impact</a>
+      <a href="#how-it-works" class="mobile-nav-link block px-3 py-2.5 rounded-xl text-sm font-medium text-slate-200 hover:bg-navy-800">How It Works</a>
+      <button onclick="copySingleFileHTML()" class="w-full text-left flex items-center gap-2 px-3 py-2.5 rounded-xl text-xs font-mono font-semibold text-emerald-400 bg-navy-900 border border-slate-800">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+        <span id="copy-btn-text-mobile">Copy Single-File HTML (GitHub Pages)</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== HERO SECTION ==================== -->
+  <section class="relative overflow-hidden tactical-grid pt-12 pb-16 sm:pt-20 sm:pb-24 border-b border-slate-800/70">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div class="max-w-3xl mx-auto text-center">
+        <!-- Tactical Badge -->
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-mono uppercase tracking-wider mb-6">
+          <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+          <span>Real-Time Computer Vision • Contactless Distress Telemetry</span>
+        </div>
+
+        <h1 class="font-display font-extrabold text-3xl sm:text-5xl lg:text-6xl tracking-tight text-white leading-tight mb-6">
+          SOS Emergency <span class="text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-amber-400 to-emerald-400">Hand Signal</span> Recognition System
+        </h1>
+
+        <p class="text-base sm:text-lg text-slate-300 leading-relaxed mb-8 max-w-2xl mx-auto">
+          Empowering silent, immediate emergency communication using edge-based AI vision. Instantly classifies critical hand signals—<strong class="text-red-400">HELP</strong>, <strong class="text-red-400">STOP</strong>, <strong class="text-amber-400">ATTENTION</strong>, and <strong class="text-emerald-400">SAFE</strong>—directly in your browser with zero server latency.
+        </p>
+
+        <!-- Primary & Secondary Hero CTAs -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <button onclick="activateModeAndScroll('webcam')" class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-sm sm:text-base shadow-lg shadow-red-600/25 transition transform hover:-translate-y-0.5">
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Launch Live Webcam
+          </button>
+
+          <button onclick="activateModeAndScroll('upload')" class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-xl bg-navy-800 hover:bg-navy-700 border border-slate-600/80 text-white font-semibold text-sm sm:text-base transition transform hover:-translate-y-0.5">
+            <svg class="w-5 h-5 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Upload Test Image
+          </button>
+        </div>
+
+        <!-- Quick Telemetry Strip -->
+        <div class="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 max-w-3xl mx-auto text-left">
+          <div class="glass-panel rounded-xl p-3.5">
+            <div class="text-[11px] font-mono uppercase text-slate-400">Model Engine</div>
+            <div class="text-sm font-semibold text-white mt-0.5">TF.js + Teachable</div>
+          </div>
+          <div class="glass-panel rounded-xl p-3.5">
+            <div class="text-[11px] font-mono uppercase text-slate-400">Signal Classes</div>
+            <div class="text-sm font-semibold text-white mt-0.5">4 Emergency States</div>
+          </div>
+          <div class="glass-panel rounded-xl p-3.5">
+            <div class="text-[11px] font-mono uppercase text-slate-400">Processing</div>
+            <div class="text-sm font-semibold text-emerald-400 mt-0.5">100% Local Edge</div>
+          </div>
+          <div class="glass-panel rounded-xl p-3.5">
+            <div class="text-[11px] font-mono uppercase text-slate-400">Model ID</div>
+            <div class="text-sm font-mono font-semibold text-slate-200 mt-0.5">OdyQhhMXg</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== LIVE AI DETECTION CONSOLE ==================== -->
+  <section id="dashboard" class="py-16 sm:py-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Section Header + Mode Switcher -->
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+        <div>
+          <div class="text-xs font-mono uppercase tracking-widest text-red-400 mb-1.5">AI Vision Telemetry Console</div>
+          <h2 class="font-display font-bold text-2xl sm:text-3xl text-white">Live Signal Detection &amp; Testing</h2>
+          <p class="text-sm text-slate-400 mt-1">Switch between real-time optical webcam tracking or static image diagnostics.</p>
+        </div>
+
+        <!-- Input Mode Toggle Tabs -->
+        <div class="inline-flex p-1.5 rounded-xl bg-navy-900 border border-slate-800 self-start md:self-auto">
+          <button id="tab-webcam" onclick="switchInputMode('webcam')" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white shadow transition">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Live Webcam
+          </button>
+          <button id="tab-upload" onclick="switchInputMode('upload')" class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-400 hover:text-white transition">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Image Upload
+          </button>
+        </div>
+      </div>
+
+      <!-- Optional Simulation Mode Notice Banner (Shown only if external Teachable Machine model fails to load due to offline/CORS) -->
+      <div id="demo-mode-banner" class="hidden mb-6 p-4 rounded-xl bg-amber-500/15 border border-amber-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div>
+            <p class="text-sm font-semibold text-amber-300">Offline / Fallback Simulation Mode Active</p>
+            <p class="text-xs text-slate-300 mt-0.5">Unable to fetch remote model weights from Google Teachable Machine (network/CORS restriction). Use the Simulate Class buttons or retry loading the live model.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button onclick="initTeachableMachineModel()" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-mono font-semibold transition">
+            Retry Model Load
+          </button>
+        </div>
+      </div>
+
+      <!-- Main 2-Column Split Dashboard Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+
+        <!-- LEFT PANEL: Optical Vision Feed (Webcam OR Image Upload) -->
+        <div class="lg:col-span-7 glass-card rounded-2xl p-5 sm:p-6 shadow-2xl">
+
+          <!-- ========== WEBCAM PANEL ========== -->
+          <div id="panel-webcam" class="space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span id="cam-live-indicator" class="w-2.5 h-2.5 rounded-full bg-slate-600"></span>
+                <span id="cam-status-label" class="text-xs font-mono uppercase tracking-wider text-slate-400">Camera Standby</span>
+              </div>
+              <div class="flex items-center gap-3 text-xs font-mono text-slate-400">
+                <span id="webcam-fps-badge" class="px-2 py-0.5 rounded bg-navy-950 border border-slate-800 text-slate-300">0 FPS</span>
+                <span class="hidden sm:inline">400×400 CROP</span>
+              </div>
+            </div>
+
+            <!-- Viewport Container with Tactical HUD Reticle -->
+            <div class="relative w-full aspect-square max-h-[440px] mx-auto rounded-2xl bg-navy-950 border border-slate-800 overflow-hidden flex items-center justify-center">
+
+              <!-- Tactical HUD Viewfinder Corner Brackets & Crosshair Reticle -->
+              <div class="pointer-events-none absolute inset-3 z-20">
+                <div class="absolute top-0 left-0 w-7 h-7 border-t-2 border-l-2 border-red-500/75 rounded-tl-md"></div>
+                <div class="absolute top-0 right-0 w-7 h-7 border-t-2 border-r-2 border-red-500/75 rounded-tr-md"></div>
+                <div class="absolute bottom-0 left-0 w-7 h-7 border-b-2 border-l-2 border-red-500/75 rounded-bl-md"></div>
+                <div class="absolute bottom-0 right-0 w-7 h-7 border-b-2 border-r-2 border-red-500/75 rounded-br-md"></div>
+                <!-- Center Reticle -->
+                <div class="absolute inset-0 flex items-center justify-center opacity-25">
+                  <div class="w-16 h-16 rounded-full border border-dashed border-slate-300 flex items-center justify-center">
+                    <div class="w-1.5 h-1.5 rounded-full bg-red-400"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Animated Scanline when Active -->
+              <div id="hud-scanline" class="hidden pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-red-500/15 to-transparent z-10 animate-scanline"></div>
+
+              <!-- Placeholder before Camera Starts -->
+              <div id="webcam-placeholder" class="text-center p-6 max-w-sm z-10">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-navy-800 border border-slate-700 flex items-center justify-center text-slate-300">
+                  <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <h3 class="font-display font-bold text-lg text-white mb-1">Optical Sensor Offline</h3>
+                <p class="text-xs sm:text-sm text-slate-400 mb-5">Grant webcam permission to begin real-time emergency hand gesture classification.</p>
+                <button onclick="startWebcam()" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-sm font-semibold shadow-lg shadow-red-600/20 transition">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Start Camera Feed
+                </button>
+              </div>
+
+              <!-- Error Message Overlay for Denied/Missing Camera -->
+              <div id="webcam-error" class="hidden text-center p-6 max-w-md z-10">
+                <div class="w-14 h-14 mx-auto mb-3 rounded-2xl bg-red-500/15 border border-red-500/40 flex items-center justify-center text-red-400">
+                  <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 class="font-display font-bold text-base text-red-400 mb-1">Camera Access Unavailable</h3>
+                <p id="webcam-error-msg" class="text-xs sm:text-sm text-slate-300 mb-4">Browser camera permission was denied or no webcam device was detected.</p>
+                <div class="flex flex-wrap items-center justify-center gap-2">
+                  <button onclick="startWebcam()" class="px-4 py-2 rounded-xl bg-navy-800 hover:bg-navy-700 text-xs font-semibold text-white border border-slate-600 transition">Try Again</button>
+                  <button onclick="switchInputMode('upload')" class="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-xs font-semibold text-white transition">Switch to Image Upload</button>
+                </div>
+              </div>
+
+              <!-- Teachable Machine Canvas Container -->
+              <div id="webcam-canvas-container" class="hidden w-full h-full flex items-center justify-center"></div>
+            </div>
+
+            <!-- Webcam Action Controls -->
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div class="flex items-center gap-2.5">
+                <button id="btn-start-cam" onclick="startWebcam()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-semibold transition">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                  </svg>
+                  Start Camera
+                </button>
+
+                <button id="btn-stop-cam" onclick="stopWebcam()" disabled class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-navy-800 hover:bg-red-600/90 disabled:opacity-40 disabled:pointer-events-none text-white text-xs sm:text-sm font-semibold border border-slate-700 transition">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                  </svg>
+                  Stop Camera
+                </button>
+              </div>
+
+              <button id="btn-flip-cam" onclick="toggleMirror()" class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-navy-800 hover:bg-navy-700 text-slate-200 text-xs font-mono border border-slate-700 transition" title="Mirror horizontal view">
+                <svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                <span id="mirror-label">Mirror: ON</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ========== IMAGE UPLOAD PANEL ========== -->
+          <div id="panel-upload" class="hidden space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-mono uppercase tracking-wider text-slate-400">Static Frame Diagnostics</span>
+              <button id="btn-clear-upload" onclick="clearUploadedImage()" class="hidden text-xs font-mono text-red-400 hover:text-red-300 underline">
+                Clear Image
+              </button>
+            </div>
+
+            <!-- Drag-and-Drop Zone + Preview Area -->
+            <div id="drop-zone" class="relative w-full aspect-square max-h-[440px] mx-auto rounded-2xl bg-navy-950 border-2 border-dashed border-slate-700 hover:border-red-500/60 transition flex flex-col items-center justify-center overflow-hidden cursor-pointer p-6 text-center">
+              <input id="file-input" type="file" accept="image/*" class="hidden" onchange="handleImageFile(this.files[0])" />
+
+              <!-- Upload Prompt -->
+              <div id="upload-prompt" class="space-y-3 pointer-events-none">
+                <div class="w-16 h-16 mx-auto rounded-2xl bg-navy-800 border border-slate-700 flex items-center justify-center text-slate-300">
+                  <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="font-display font-bold text-base sm:text-lg text-white">Drop Hand Gesture Photo Here</p>
+                  <p class="text-xs sm:text-sm text-slate-400 mt-1">or <span class="text-red-400 font-semibold underline">browse files</span> (JPG, PNG, WEBP)</p>
+                </div>
+                <p class="text-[11px] font-mono text-slate-500 pt-2">Instant local inference upon image selection</p>
+              </div>
+
+              <!-- Uploaded Image Preview -->
+              <img id="uploaded-preview" alt="Uploaded hand signal preview" class="hidden w-full h-full object-contain rounded-xl" />
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <button onclick="document.getElementById('file-input').click()" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs sm:text-sm font-semibold transition">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Select Image File
+              </button>
+              <span class="text-xs text-slate-400">Tip: Ensure the hand gesture is clearly centered and well-lit.</span>
+            </div>
+          </div>
+
+          <!-- Simulate Class Test Bar -->
+          <div class="mt-5 pt-4 border-t border-slate-800/80">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Simulate Class (Test Without Camera)</span>
+              <span class="text-[11px] font-mono text-slate-500">THRESHOLD: ≥75%</span>
+            </div>
+            <div class="grid grid-cols-4 gap-2">
+              <button onclick="simulatePrediction('HELP')" class="py-2 px-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 text-xs font-mono font-semibold transition">HELP</button>
+              <button onclick="simulatePrediction('STOP')" class="py-2 px-2 rounded-lg bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 text-xs font-mono font-semibold transition">STOP</button>
+              <button onclick="simulatePrediction('ATTENTION')" class="py-2 px-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-mono font-semibold transition">ATTENTION</button>
+              <button onclick="simulatePrediction('SAFE')" class="py-2 px-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-semibold transition">SAFE</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT PANEL: AI Telemetry, Predictions & Event Log -->
+        <div class="lg:col-span-5 glass-card rounded-2xl p-5 sm:p-6 shadow-2xl space-y-6">
+
+          <!-- Dynamic Emergency Alert Banner -->
+          <div>
+            <div class="flex items-center justify-between mb-2.5">
+              <span class="text-xs font-mono uppercase tracking-widest text-slate-400">Emergency Alert Status</span>
+              <span id="inference-fps" class="text-xs font-mono text-slate-400">-- FPS</span>
+            </div>
+
+            <div id="dominant-banner" class="rounded-2xl p-5 bg-navy-900 border border-slate-700/80 transition-all duration-300">
+              <div class="flex items-start justify-between gap-4">
+                <div class="flex items-start gap-3.5">
+                  <!-- Dynamic Signal Icon -->
+                  <div id="dominant-icon-box" class="w-11 h-11 rounded-xl bg-navy-800 border border-slate-700 flex items-center justify-center text-slate-400 shrink-0 mt-0.5">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div id="dominant-badge" class="inline-block px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold uppercase tracking-wider bg-navy-800 text-slate-300 mb-1.5">
+                      STANDBY
+                    </div>
+                    <h3 id="dominant-title" class="font-display font-extrabold text-2xl sm:text-3xl tracking-tight text-white">
+                      Awaiting Input
+                    </h3>
+                    <p id="dominant-subtitle" class="text-xs sm:text-sm text-slate-400 mt-1">
+                      Activate webcam or upload an image to analyze hand signals.
+                    </p>
+                  </div>
+                </div>
+                <div class="text-right shrink-0">
+                  <div id="dominant-confidence" class="font-mono font-bold text-2xl sm:text-3xl text-slate-300">
+                    0.0%
+                  </div>
+                  <div class="text-[11px] font-mono uppercase text-slate-500 mt-0.5">Confidence</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Class Probability Bars -->
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-mono uppercase tracking-widest text-slate-400">Class Probability Matrix</span>
+              <span class="text-xs font-mono text-emerald-400">ALERT TRIGGER ≥ 75%</span>
+            </div>
+
+            <div id="prediction-bars-container" class="space-y-3">
+              <!-- Bar 1: HELP -->
+              <div class="p-3.5 rounded-xl bg-navy-900/90 border border-slate-800">
+                <div class="flex items-center justify-between text-sm mb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                    <span class="font-display font-bold text-white tracking-wide">HELP</span>
+                    <span class="text-[11px] text-slate-400 hidden sm:inline">— Distress / Assistance</span>
+                  </div>
+                  <span id="prob-text-HELP" class="font-mono font-bold text-red-400">0.0%</span>
+                </div>
+                <div class="relative w-full h-2.5 rounded-full bg-navy-950 overflow-hidden">
+                  <div class="absolute top-0 bottom-0 left-[75%] w-0.5 bg-slate-500/50 z-10" title="75% Alert Threshold"></div>
+                  <div id="prob-bar-HELP" class="progress-fill h-full rounded-full bg-red-500" style="width: 0%"></div>
+                </div>
+              </div>
+
+              <!-- Bar 2: STOP -->
+              <div class="p-3.5 rounded-xl bg-navy-900/90 border border-slate-800">
+                <div class="flex items-center justify-between text-sm mb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                    <span class="font-display font-bold text-white tracking-wide">STOP</span>
+                    <span class="text-[11px] text-slate-400 hidden sm:inline">— Halt Immediately</span>
+                  </div>
+                  <span id="prob-text-STOP" class="font-mono font-bold text-red-400">0.0%</span>
+                </div>
+                <div class="relative w-full h-2.5 rounded-full bg-navy-950 overflow-hidden">
+                  <div class="absolute top-0 bottom-0 left-[75%] w-0.5 bg-slate-500/50 z-10" title="75% Alert Threshold"></div>
+                  <div id="prob-bar-STOP" class="progress-fill h-full rounded-full bg-red-500" style="width: 0%"></div>
+                </div>
+              </div>
+
+              <!-- Bar 3: ATTENTION -->
+              <div class="p-3.5 rounded-xl bg-navy-900/90 border border-slate-800">
+                <div class="flex items-center justify-between text-sm mb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    <span class="font-display font-bold text-white tracking-wide">ATTENTION</span>
+                    <span class="text-[11px] text-slate-400 hidden sm:inline">— Alert / Hazard</span>
+                  </div>
+                  <span id="prob-text-ATTENTION" class="font-mono font-bold text-amber-400">0.0%</span>
+                </div>
+                <div class="relative w-full h-2.5 rounded-full bg-navy-950 overflow-hidden">
+                  <div class="absolute top-0 bottom-0 left-[75%] w-0.5 bg-slate-500/50 z-10" title="75% Alert Threshold"></div>
+                  <div id="prob-bar-ATTENTION" class="progress-fill h-full rounded-full bg-amber-500" style="width: 0%"></div>
+                </div>
+              </div>
+
+              <!-- Bar 4: SAFE -->
+              <div class="p-3.5 rounded-xl bg-navy-900/90 border border-slate-800">
+                <div class="flex items-center justify-between text-sm mb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span class="font-display font-bold text-white tracking-wide">SAFE</span>
+                    <span class="text-[11px] text-slate-400 hidden sm:inline">— Clear / Accounted</span>
+                  </div>
+                  <span id="prob-text-SAFE" class="font-mono font-bold text-emerald-400">0.0%</span>
+                </div>
+                <div class="relative w-full h-2.5 rounded-full bg-navy-950 overflow-hidden">
+                  <div class="absolute top-0 bottom-0 left-[75%] w-0.5 bg-slate-500/50 z-10" title="75% Alert Threshold"></div>
+                  <div id="prob-bar-SAFE" class="progress-fill h-full rounded-full bg-emerald-500" style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-Time Telemetry Event Log -->
+          <div class="pt-3 border-t border-slate-800/80">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[11px] font-mono uppercase tracking-wider text-slate-400">Signal Detection Event Log</span>
+              <button onclick="clearEventLog()" class="text-[11px] font-mono text-slate-400 hover:text-white transition">Clear Log</button>
+            </div>
+            <div id="event-log-list" class="h-28 overflow-y-auto rounded-xl bg-navy-950 border border-slate-800/90 p-2.5 space-y-1.5 font-mono text-xs">
+              <div class="text-slate-500 flex items-center justify-between">
+                <span>[SYSTEM] Telemetry console initialized.</span>
+                <span>READY</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== GESTURE CLASSES REFERENCE SECTION ==================== -->
+  <section id="gestures" class="py-16 sm:py-20 border-t border-slate-800/70 bg-navy-900/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="max-w-2xl mb-12">
+        <div class="text-xs font-mono uppercase tracking-widest text-red-400 mb-2">Trained Model Vocabulary</div>
+        <h2 class="font-display font-bold text-2xl sm:text-4xl text-white">Emergency Hand Signal Classes</h2>
+        <p class="text-sm sm:text-base text-slate-400 mt-2">
+          Cards dynamically illuminate with a glowing border and <span class="font-mono text-slate-200">ACTIVE SIGNAL</span> badge whenever the vision model detects a gesture at or above <span class="font-mono text-slate-200">75%</span> confidence.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+
+        <!-- Card 1: HELP -->
+        <div id="gesture-card-HELP" class="glass-card rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between border border-slate-800">
+          <div>
+            <div class="flex items-center justify-between mb-5">
+              <div class="w-12 h-12 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+                </svg>
+              </div>
+              <span id="card-badge-HELP" class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-red-500/15 text-red-400 border border-red-500/30">
+                Critical SOS
+              </span>
+            </div>
+            <h3 class="font-display font-bold text-xl text-white mb-2">HELP</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-4">
+              Requesting immediate emergency assistance, medical aid, or rescue intervention without needing to speak aloud.
+            </p>
+          </div>
+          <div class="pt-4 border-t border-slate-800/80 text-xs font-mono text-red-400 flex items-center justify-between">
+            <span>PROTOCOL: DISPATCH</span>
+            <span id="card-status-HELP" class="text-slate-500">STANDBY</span>
+          </div>
+        </div>
+
+        <!-- Card 2: STOP -->
+        <div id="gesture-card-STOP" class="glass-card rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between border border-slate-800">
+          <div>
+            <div class="flex items-center justify-between mb-5">
+              <div class="w-12 h-12 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+              </div>
+              <span id="card-badge-STOP" class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-red-500/15 text-red-400 border border-red-500/30">
+                Immediate Halt
+              </span>
+            </div>
+            <h3 class="font-display font-bold text-xl text-white mb-2">STOP</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-4">
+              Signaling personnel, machinery, or approaching individuals to halt movement immediately to prevent injury or collision.
+            </p>
+          </div>
+          <div class="pt-4 border-t border-slate-800/80 text-xs font-mono text-red-400 flex items-center justify-between">
+            <span>PROTOCOL: HALT</span>
+            <span id="card-status-STOP" class="text-slate-500">STANDBY</span>
+          </div>
+        </div>
+
+        <!-- Card 3: ATTENTION -->
+        <div id="gesture-card-ATTENTION" class="glass-card rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between border border-slate-800">
+          <div>
+            <div class="flex items-center justify-between mb-5">
+              <div class="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <span id="card-badge-ATTENTION" class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                Warning Alert
+              </span>
+            </div>
+            <h3 class="font-display font-bold text-xl text-white mb-2">ATTENTION</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-4">
+              Alerting responders, bystanders, or team members to notice an emerging hazard, directional cue, or urgent update.
+            </p>
+          </div>
+          <div class="pt-4 border-t border-slate-800/80 text-xs font-mono text-amber-400 flex items-center justify-between">
+            <span>PROTOCOL: OBSERVE</span>
+            <span id="card-status-ATTENTION" class="text-slate-500">STANDBY</span>
+          </div>
+        </div>
+
+        <!-- Card 4: SAFE -->
+        <div id="gesture-card-SAFE" class="glass-card rounded-2xl p-6 transition-all duration-300 flex flex-col justify-between border border-slate-800">
+          <div>
+            <div class="flex items-center justify-between mb-5">
+              <div class="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <span id="card-badge-SAFE" class="px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                All Clear
+              </span>
+            </div>
+            <h3 class="font-display font-bold text-xl text-white mb-2">SAFE</h3>
+            <p class="text-sm text-slate-300 leading-relaxed mb-4">
+              Confirming that an individual or zone is secure, uninjured, accounted for, and out of immediate danger.
+            </p>
+          </div>
+          <div class="pt-4 border-t border-slate-800/80 text-xs font-mono text-emerald-400 flex items-center justify-between">
+            <span>PROTOCOL: LOG CLEAR</span>
+            <span id="card-status-SAFE" class="text-slate-500">STANDBY</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== COMMUNITY IMPACT SECTION ==================== -->
+  <section id="impact" class="py-16 sm:py-20 border-t border-slate-800/70">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+
+        <!-- Left Narrative -->
+        <div class="lg:col-span-5 space-y-5">
+          <div class="text-xs font-mono uppercase tracking-widest text-emerald-400">Humanitarian &amp; Civic Value</div>
+          <h2 class="font-display font-bold text-2xl sm:text-4xl text-white leading-tight">
+            Bridging Communication Barriers When Every Second Counts
+          </h2>
+          <p class="text-sm sm:text-base text-slate-300 leading-relaxed">
+            Traditional emergency response relies heavily on spoken calls and audible alarms. However, crises frequently occur where speech is impossible, unsafe, or unheard across linguistic and physical barriers.
+          </p>
+          <p class="text-sm sm:text-base text-slate-400 leading-relaxed">
+            By translating universal hand signals into instant machine-readable alerts, <strong class="text-white">SOS.AI</strong> fosters inclusive community safety across schools, workplaces, public transit hubs, and disaster response zones.
+          </p>
+        </div>
+
+        <!-- Right 4 Impact Pillars -->
+        <div class="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div class="glass-card rounded-2xl p-6">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center mb-4">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <h3 class="font-display font-bold text-lg text-white mb-1.5">Deaf &amp; Nonverbal Accessibility</h3>
+            <p class="text-sm text-slate-400 leading-relaxed">
+              Empowers Deaf, hard-of-hearing, and speech-impaired individuals to communicate urgent distress or safety status visually without verbal barriers.
+            </p>
+          </div>
+
+          <div class="glass-card rounded-2xl p-6">
+            <div class="w-10 h-10 rounded-xl bg-red-500/15 text-red-400 flex items-center justify-center mb-4">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h3 class="font-display font-bold text-lg text-white mb-1.5">Discreet Silent Distress</h3>
+            <p class="text-sm text-slate-400 leading-relaxed">
+              Enables silent signaling during domestic emergencies, medical incapacitation, or security threats where speaking aloud could escalate danger.
+            </p>
+          </div>
+
+          <div class="glass-card rounded-2xl p-6">
+            <div class="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center mb-4">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 class="font-display font-bold text-lg text-white mb-1.5">Language-Independent &amp; High-Noise</h3>
+            <p class="text-sm text-slate-400 leading-relaxed">
+              Bridges spoken language barriers during international disasters and overcomes acoustic interference on construction sites, factories, and crowded venues.
+            </p>
+          </div>
+
+          <div class="glass-card rounded-2xl p-6">
+            <div class="w-10 h-10 rounded-xl bg-sky-500/15 text-sky-400 flex items-center justify-center mb-4">
+              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <h3 class="font-display font-bold text-lg text-white mb-1.5">Zero-Cloud Privacy First</h3>
+            <p class="text-sm text-slate-400 leading-relaxed">
+              All neural inference runs locally inside the user's browser via WebGL/TensorFlow.js—no webcam footage is ever recorded or transmitted externally.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== HOW IT WORKS SECTION ==================== -->
+  <section id="how-it-works" class="py-16 sm:py-20 border-t border-slate-800/70 bg-navy-900/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-2xl mx-auto mb-12">
+        <div class="text-xs font-mono uppercase tracking-widest text-red-400 mb-2">System Pipeline</div>
+        <h2 class="font-display font-bold text-2xl sm:text-4xl text-white">How SOS.AI Works</h2>
+        <p class="text-sm sm:text-base text-slate-400 mt-2">
+          Four streamlined stages from optical capture to actionable emergency telemetry.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Step 1 -->
+        <div class="glass-card rounded-2xl p-6 relative">
+          <div class="text-xs font-mono font-bold text-red-400 mb-3">STEP 01</div>
+          <h3 class="font-display font-bold text-lg text-white mb-2">Video / Image Capture</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Captures live video frames from your device webcam or loads an uploaded static image directly into an HTML5 canvas buffer.
+          </p>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="glass-card rounded-2xl p-6 relative">
+          <div class="text-xs font-mono font-bold text-amber-400 mb-3">STEP 02</div>
+          <h3 class="font-display font-bold text-lg text-white mb-2">Edge TensorFlow.js Processing</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            TensorFlow.js processes each frame locally using your Teachable Machine MobileNet transfer-learning model (<span class="font-mono text-xs text-slate-300">OdyQhhMXg</span>).
+          </p>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="glass-card rounded-2xl p-6 relative">
+          <div class="text-xs font-mono font-bold text-emerald-400 mb-3">STEP 03</div>
+          <h3 class="font-display font-bold text-lg text-white mb-2">Class Probability Scoring</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Computes normalized softmax confidence percentages across all four trained emergency classes: HELP, STOP, ATTENTION, and SAFE.
+          </p>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="glass-card rounded-2xl p-6 relative">
+          <div class="text-xs font-mono font-bold text-sky-400 mb-3">STEP 04</div>
+          <h3 class="font-display font-bold text-lg text-white mb-2">Instant Visual Alerting</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Triggers color-coded telemetry banners, live progress gauges, event logs, and gesture protocol highlights for immediate situational awareness.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== FOOTER ==================== -->
+  <footer class="border-t border-slate-800/80 py-10 bg-navy-950">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+      <div class="flex items-center gap-2.5">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span class="font-display font-bold text-slate-200">SOS.AI Emergency Hand Signal Recognition System</span>
+      </div>
+      <div class="text-center sm:text-right space-y-1">
+        <p>Powered by Google Teachable Machine &amp; TensorFlow.js • 100% Client-Side Browser Inference</p>
+        <p class="font-mono text-[11px] text-slate-500">Model Endpoint: teachablemachine.withgoogle.com/models/OdyQhhMXg/</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==================== JAVASCRIPT APPLICATION LOGIC ==================== -->
+  <script>
+    /**
+     * SOS Emergency Hand Signal Recognition System
+     * Integrates Google Teachable Machine Image Model:
+     * https://teachablemachine.withgoogle.com/models/OdyQhhMXg/
+     */
+
+    const MODEL_BASE_URL = "https://teachablemachine.withgoogle.com/models/OdyQhhMXg/";
+    const ALERT_THRESHOLD = 0.75;
+
+    // Application State
+    let tmModel = null;
+    let webcam = null;
+    let isWebcamRunning = false;
+    let animationFrameId = null;
+    let isMirrored = true;
+    let isDemoSimulationMode = false;
+    let lastLoggedSignal = null;
+    let lastLoggedTime = 0;
+
+    // FPS Telemetry tracking
+    let lastFrameTimestamp = performance.now();
+    let frameCounter = 0;
+
+    // Canonical Class Metadata & Visual Styling Map (Ordered: HELP, STOP, ATTENTION, SAFE)
+    const CLASS_CONFIG = {
+      HELP: {
+        label: "HELP",
+        badge: "CRITICAL EMERGENCY",
+        defaultCardBadge: "Critical SOS",
+        subtitle: "Distress detected — immediate assistance requested.",
+        theme: "red",
+        bannerClasses: "bg-red-950/75 border-red-500 shadow-lg shadow-red-500/20",
+        badgeClasses: "bg-red-500 text-white",
+        confClasses: "text-red-400",
+        iconBgClasses: "bg-red-500/20 border-red-500/50 text-red-400",
+        iconSvg: `<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" /></svg>`
+      },
+      STOP: {
+        label: "STOP",
+        badge: "IMMEDIATE HALT",
+        defaultCardBadge: "Immediate Halt",
+        subtitle: "Stop signal — halt action or movement immediately.",
+        theme: "red",
+        bannerClasses: "bg-red-950/75 border-red-500 shadow-lg shadow-red-500/20",
+        badgeClasses: "bg-red-500 text-white",
+        confClasses: "text-red-400",
+        iconBgClasses: "bg-red-500/20 border-red-500/50 text-red-400",
+        iconSvg: `<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>`
+      },
+      ATTENTION: {
+        label: "ATTENTION",
+        badge: "WARNING ALERT",
+        defaultCardBadge: "Warning Alert",
+        subtitle: "Alert signal — observe hazard or directional cue.",
+        theme: "orange",
+        bannerClasses: "bg-amber-950/75 border-amber-500 shadow-lg shadow-amber-500/20",
+        badgeClasses: "bg-amber-500 text-slate-950",
+        confClasses: "text-amber-400",
+        iconBgClasses: "bg-amber-500/20 border-amber-500/50 text-amber-400",
+        iconSvg: `<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>`
+      },
+      SAFE: {
+        label: "SAFE",
+        badge: "STATUS CONFIRMED",
+        defaultCardBadge: "All Clear",
+        subtitle: "All clear — individual or perimeter reported safe.",
+        theme: "green",
+        bannerClasses: "bg-emerald-950/75 border-emerald-500 shadow-lg shadow-emerald-500/20",
+        badgeClasses: "bg-emerald-500 text-slate-950",
+        confClasses: "text-emerald-400",
+        iconBgClasses: "bg-emerald-500/20 border-emerald-500/50 text-emerald-400",
+        iconSvg: `<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>`
+      }
+    };
+
+    /**
+     * Copy Full Single-File HTML to Clipboard for GitHub Pages Deployment
+     */
+    function copySingleFileHTML() {
+      const fullHtml = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+      const textarea = document.createElement("textarea");
+      textarea.value = fullHtml;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+
+      try {
+        document.execCommand("copy");
+        const btnText = document.getElementById("copy-btn-text");
+        const btnTextMobile = document.getElementById("copy-btn-text-mobile");
+        if (btnText) btnText.textContent = "Copied!";
+        if (btnTextMobile) btnTextMobile.textContent = "Copied index.html to Clipboard!";
+        appendEventLog("SYSTEM", "Full index.html copied for GitHub Pages.", "text-emerald-400");
+
+        setTimeout(() => {
+          if (btnText) btnText.textContent = "Copy HTML";
+          if (btnTextMobile) btnTextMobile.textContent = "Copy Single-File HTML (GitHub Pages)";
+        }, 2500);
+      } catch (err) {
+        console.warn("Copy failed:", err);
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    }
+
+    /**
+     * Initialize Mobile Navigation Menu
+     */
+    const mobileMenuBtn = document.getElementById("mobile-menu-btn");
+    const mobileMenu = document.getElementById("mobile-menu");
+    const menuIconOpen = document.getElementById("menu-icon-open");
+    const menuIconClose = document.getElementById("menu-icon-close");
+
+    mobileMenuBtn.addEventListener("click", () => {
+      const isHidden = mobileMenu.classList.contains("hidden");
+      mobileMenu.classList.toggle("hidden", !isHidden);
+      menuIconOpen.classList.toggle("hidden", isHidden);
+      menuIconClose.classList.toggle("hidden", !isHidden);
+    });
+
+    document.querySelectorAll(".mobile-nav-link").forEach(link => {
+      link.addEventListener("click", () => {
+        mobileMenu.classList.add("hidden");
+        menuIconOpen.classList.remove("hidden");
+        menuIconClose.classList.add("hidden");
+      });
+    });
+
+    /**
+     * Update Top Navbar System Status Pill
+     */
+    function setSystemStatus(statusText, colorClass, pulse = false) {
+      const dot = document.getElementById("nav-status-dot");
+      const text = document.getElementById("nav-status-text");
+      dot.className = `w-2 h-2 rounded-full ${colorClass} ${pulse ? "animate-pulse" : ""}`;
+      text.textContent = statusText;
+    }
+
+    /**
+     * Load the Teachable Machine Model on Startup
+     */
+    async function initTeachableMachineModel() {
+      setSystemStatus("LOADING MODEL...", "bg-amber-400", true);
+      document.getElementById("demo-mode-banner").classList.add("hidden");
+
+      try {
+        if (typeof tmImage === "undefined") {
+          throw new Error("Teachable Machine library not loaded.");
+        }
+        const modelURL = MODEL_BASE_URL + "model.json";
+        const metadataURL = MODEL_BASE_URL + "metadata.json";
+
+        tmModel = await tmImage.load(modelURL, metadataURL);
+        isDemoSimulationMode = false;
+        setSystemStatus("MODEL CONNECTED", "bg-emerald-400", false);
+        appendEventLog("MODEL", "Teachable Machine OdyQhhMXg loaded.", "text-emerald-400");
+      } catch (error) {
+        console.warn("Teachable Machine remote load error:", error);
+        isDemoSimulationMode = true;
+        setSystemStatus("SIMULATION MODE", "bg-amber-400", false);
+        document.getElementById("demo-mode-banner").classList.remove("hidden");
+        appendEventLog("WARN", "Remote model unreachable; fallback active.", "text-amber-400");
+      }
+    }
+
+    /**
+     * Helper to scroll smoothly to dashboard and select input mode
+     */
+    function activateModeAndScroll(mode) {
+      switchInputMode(mode);
+      document.getElementById("dashboard").scrollIntoView({ behavior: "smooth" });
+      if (mode === "webcam" && !isWebcamRunning) {
+        startWebcam();
+      }
+    }
+
+    /**
+     * Switch between 'webcam' and 'upload' tabs
+     */
+    function switchInputMode(mode) {
+      const tabWebcam = document.getElementById("tab-webcam");
+      const tabUpload = document.getElementById("tab-upload");
+      const panelWebcam = document.getElementById("panel-webcam");
+      const panelUpload = document.getElementById("panel-upload");
+
+      if (mode === "webcam") {
+        tabWebcam.className = "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white shadow transition";
+        tabUpload.className = "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-400 hover:text-white transition";
+        panelWebcam.classList.remove("hidden");
+        panelUpload.classList.add("hidden");
+      } else {
+        if (isWebcamRunning) {
+          stopWebcam();
+        }
+        tabUpload.className = "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white shadow transition";
+        tabWebcam.className = "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-slate-400 hover:text-white transition";
+        panelUpload.classList.remove("hidden");
+        panelWebcam.classList.add("hidden");
+      }
+    }
+
+    /**
+     * Start Live Webcam Feed & Prediction Loop
+     */
+    async function startWebcam() {
+      if (isWebcamRunning) return;
+
+      const placeholder = document.getElementById("webcam-placeholder");
+      const errorBox = document.getElementById("webcam-error");
+      const errorMsg = document.getElementById("webcam-error-msg");
+      const canvasContainer = document.getElementById("webcam-canvas-container");
+      const scanline = document.getElementById("hud-scanline");
+      const camIndicator = document.getElementById("cam-live-indicator");
+      const camLabel = document.getElementById("cam-status-label");
+
+      placeholder.classList.add("hidden");
+      errorBox.classList.add("hidden");
+      camLabel.textContent = "Requesting Camera...";
+
+      try {
+        if (!tmModel && !isDemoSimulationMode) {
+          await initTeachableMachineModel();
+        }
+
+        if (typeof tmImage !== "undefined" && tmImage.Webcam) {
+          webcam = new tmImage.Webcam(400, 400, isMirrored);
+          await webcam.setup();
+          await webcam.play();
+
+          canvasContainer.innerHTML = "";
+          webcam.canvas.className = "w-full h-full object-cover rounded-xl";
+          canvasContainer.appendChild(webcam.canvas);
+        } else {
+          throw new Error("Webcam utility unavailable in current environment.");
+        }
+
+        isWebcamRunning = true;
+        canvasContainer.classList.remove("hidden");
+        scanline.classList.remove("hidden");
+        camIndicator.className = "w-2.5 h-2.5 rounded-full bg-red-500 animate-ping";
+        camLabel.textContent = "LIVE OPTICAL FEED";
+        camLabel.className = "text-xs font-mono uppercase tracking-wider text-red-400 font-semibold";
+
+        document.getElementById("btn-start-cam").disabled = true;
+        document.getElementById("btn-start-cam").classList.add("opacity-40", "pointer-events-none");
+        document.getElementById("btn-stop-cam").disabled = false;
+
+        appendEventLog("OPTICAL", "Live webcam feed started.", "text-slate-300");
+
+        lastFrameTimestamp = performance.now();
+        frameCounter = 0;
+        webcamLoop();
+      } catch (err) {
+        console.error("Webcam startup failed:", err);
+        isWebcamRunning = false;
+        canvasContainer.classList.add("hidden");
+        scanline.classList.add("hidden");
+        errorBox.classList.remove("hidden");
+        camIndicator.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+        camLabel.textContent = "Camera Error";
+
+        if (err && err.name === "NotAllowedError") {
+          errorMsg.textContent = "Camera permission was blocked by your browser. Please allow camera access in site settings or test with Image Upload.";
+        } else if (err && err.name === "NotFoundError") {
+          errorMsg.textContent = "No camera hardware was found on this device. Switch to Image Upload to test with photos.";
+        } else {
+          errorMsg.textContent = "Unable to access camera stream. Ensure HTTPS is active or use the Image Upload tester.";
+        }
+      }
+    }
+
+    /**
+     * Stop Live Webcam Feed
+     */
+    function stopWebcam() {
+      isWebcamRunning = false;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+      if (webcam) {
+        try {
+          webcam.stop();
+        } catch (e) {
+          console.warn("Webcam stop warning:", e);
+        }
+        webcam = null;
+      }
+
+      document.getElementById("webcam-canvas-container").classList.add("hidden");
+      document.getElementById("webcam-canvas-container").innerHTML = "";
+      document.getElementById("hud-scanline").classList.add("hidden");
+      document.getElementById("webcam-placeholder").classList.remove("hidden");
+
+      document.getElementById("cam-live-indicator").className = "w-2.5 h-2.5 rounded-full bg-slate-600";
+      const camLabel = document.getElementById("cam-status-label");
+      camLabel.textContent = "Camera Standby";
+      camLabel.className = "text-xs font-mono uppercase tracking-wider text-slate-400";
+
+      document.getElementById("btn-start-cam").disabled = false;
+      document.getElementById("btn-start-cam").classList.remove("opacity-40", "pointer-events-none");
+      document.getElementById("btn-stop-cam").disabled = true;
+      document.getElementById("inference-fps").textContent = "-- FPS";
+      document.getElementById("webcam-fps-badge").textContent = "0 FPS";
+      appendEventLog("OPTICAL", "Webcam feed stopped.", "text-slate-400");
+    }
+
+    /**
+     * Toggle Horizontal Mirroring on Webcam
+     */
+    function toggleMirror() {
+      isMirrored = !isMirrored;
+      document.getElementById("mirror-label").textContent = `Mirror: ${isMirrored ? "ON" : "OFF"}`;
+      if (webcam && webcam.canvas) {
+        webcam.flip = isMirrored;
+      }
+    }
+
+    /**
+     * Main Continuous Webcam Inference Loop
+     */
+    async function webcamLoop() {
+      if (!isWebcamRunning || !webcam) return;
+
+      webcam.update();
+
+      if (tmModel) {
+        const predictions = await tmModel.predict(webcam.canvas);
+        processModelPredictions(predictions);
+      } else if (isDemoSimulationMode) {
+        runSimulatedInference();
+      }
+
+      // Compute FPS
+      frameCounter++;
+      const now = performance.now();
+      if (now - lastFrameTimestamp >= 1000) {
+        const fps = Math.round((frameCounter * 1000) / (now - lastFrameTimestamp));
+        document.getElementById("inference-fps").textContent = `${fps} FPS`;
+        document.getElementById("webcam-fps-badge").textContent = `${fps} FPS`;
+        frameCounter = 0;
+        lastFrameTimestamp = now;
+      }
+
+      animationFrameId = requestAnimationFrame(webcamLoop);
+    }
+
+    /**
+     * Drag-and-Drop & File Input Handlers for Image Upload Mode
+     */
+    const dropZone = document.getElementById("drop-zone");
+
+    dropZone.addEventListener("click", (e) => {
+      if (e.target.id !== "file-input") {
+        document.getElementById("file-input").click();
+      }
+    });
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("border-red-500", "bg-navy-900/80");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("border-red-500", "bg-navy-900/80");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("border-red-500", "bg-navy-900/80");
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleImageFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    function handleImageFile(file) {
+      if (!file || !file.type.startsWith("image/")) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const previewImg = document.getElementById("uploaded-preview");
+        const promptBox = document.getElementById("upload-prompt");
+        const clearBtn = document.getElementById("btn-clear-upload");
+
+        previewImg.onload = async () => {
+          promptBox.classList.add("hidden");
+          previewImg.classList.remove("hidden");
+          clearBtn.classList.remove("hidden");
+
+          if (tmModel) {
+            const predictions = await tmModel.predict(previewImg);
+            processModelPredictions(predictions);
+            document.getElementById("inference-fps").textContent = "STATIC";
+          } else {
+            simulatePrediction("HELP");
+            document.getElementById("inference-fps").textContent = "SIM";
+          }
+        };
+        previewImg.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearUploadedImage() {
+      const previewImg = document.getElementById("uploaded-preview");
+      const promptBox = document.getElementById("upload-prompt");
+      const clearBtn = document.getElementById("btn-clear-upload");
+      const fileInput = document.getElementById("file-input");
+
+      previewImg.src = "";
+      previewImg.classList.add("hidden");
+      promptBox.classList.remove("hidden");
+      clearBtn.classList.add("hidden");
+      fileInput.value = "";
+      resetTelemetryUI();
+    }
+
+    /**
+     * Normalize & Render Predictions from Teachable Machine Model
+     * Maps model class names case-insensitively to HELP, STOP, ATTENTION, SAFE
+     */
+    function processModelPredictions(predictions) {
+      const normalizedScores = {
+        HELP: 0,
+        STOP: 0,
+        ATTENTION: 0,
+        SAFE: 0
+      };
+
+      predictions.forEach(pred => {
+        const key = pred.className.trim().toUpperCase();
+        if (Object.prototype.hasOwnProperty.call(normalizedScores, key)) {
+          normalizedScores[key] = pred.probability;
+        }
+      });
+
+      updateTelemetryUI(normalizedScores);
+    }
+
+    /**
+     * Update Progress Bars, Dominant Banner, Event Log, and Gesture Card Highlights
+     */
+    function updateTelemetryUI(scores) {
+      let topClass = null;
+      let topScore = -1;
+
+      Object.keys(CLASS_CONFIG).forEach(className => {
+        const prob = scores[className] || 0;
+        const pct = (prob * 100).toFixed(1);
+
+        // Update progress bar & percentage text
+        const barEl = document.getElementById(`prob-bar-${className}`);
+        const textEl = document.getElementById(`prob-text-${className}`);
+        if (barEl) barEl.style.width = `${pct}%`;
+        if (textEl) textEl.textContent = `${pct}%`;
+
+        if (prob > topScore) {
+          topScore = prob;
+          topClass = className;
+        }
+
+        // Highlight matching Gesture Reference Card if confidence >= ALERT_THRESHOLD (75%)
+        const cardEl = document.getElementById(`gesture-card-${className}`);
+        const cardStatusEl = document.getElementById(`card-status-${className}`);
+        const cardBadgeEl = document.getElementById(`card-badge-${className}`);
+        const cfg = CLASS_CONFIG[className];
+
+        if (cardEl && cardStatusEl && cardBadgeEl) {
+          cardEl.classList.remove("card-active-red", "card-active-orange", "card-active-green");
+          if (prob >= ALERT_THRESHOLD) {
+            cardEl.classList.add(`card-active-${cfg.theme}`);
+            cardStatusEl.textContent = `DETECTED (${pct}%)`;
+            cardStatusEl.className = "font-bold text-white";
+            cardBadgeEl.textContent = "ACTIVE SIGNAL";
+            cardBadgeEl.className = `px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase ${cfg.badgeClasses} animate-pulse`;
+          } else {
+            cardStatusEl.textContent = "STANDBY";
+            cardStatusEl.className = "text-slate-500";
+            cardBadgeEl.textContent = cfg.defaultCardBadge;
+            if (cfg.theme === "red") {
+              cardBadgeEl.className = "px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-red-500/15 text-red-400 border border-red-500/30";
+            } else if (cfg.theme === "orange") {
+              cardBadgeEl.className = "px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30";
+            } else {
+              cardBadgeEl.className = "px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30";
+            }
+          }
+        }
+      });
+
+      // Log high-confidence detection events (throttled to avoid log spam)
+      if (topClass && topScore >= ALERT_THRESHOLD) {
+        const now = Date.now();
+        if (topClass !== lastLoggedSignal || now - lastLoggedTime > 4000) {
+          lastLoggedSignal = topClass;
+          lastLoggedTime = now;
+          const colorMap = { HELP: "text-red-400", STOP: "text-red-400", ATTENTION: "text-amber-400", SAFE: "text-emerald-400" };
+          appendEventLog(topClass, `Signal confirmed (${(topScore * 100).toFixed(1)}%)`, colorMap[topClass]);
+        }
+      }
+
+      // Update Dominant Emergency Alert Banner
+      const bannerEl = document.getElementById("dominant-banner");
+      const iconBoxEl = document.getElementById("dominant-icon-box");
+      const badgeEl = document.getElementById("dominant-badge");
+      const titleEl = document.getElementById("dominant-title");
+      const subtitleEl = document.getElementById("dominant-subtitle");
+      const confEl = document.getElementById("dominant-confidence");
+
+      if (topClass && topScore >= 0.45) {
+        const cfg = CLASS_CONFIG[topClass];
+        bannerEl.className = `rounded-2xl p-5 border transition-all duration-300 ${cfg.bannerClasses}`;
+        iconBoxEl.className = `w-11 h-11 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${cfg.iconBgClasses}`;
+        iconBoxEl.innerHTML = cfg.iconSvg;
+        badgeEl.className = `inline-block px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold uppercase tracking-wider mb-1.5 ${cfg.badgeClasses}`;
+        badgeEl.textContent = cfg.badge;
+        titleEl.textContent = cfg.label;
+        subtitleEl.textContent = cfg.subtitle;
+        confEl.className = `font-mono font-bold text-2xl sm:text-3xl ${cfg.confClasses}`;
+        confEl.textContent = `${(topScore * 100).toFixed(1)}%`;
+      } else {
+        bannerEl.className = "rounded-2xl p-5 bg-navy-900 border border-slate-700/80 transition-all duration-300";
+        iconBoxEl.className = "w-11 h-11 rounded-xl bg-navy-800 border border-slate-700 flex items-center justify-center text-slate-400 shrink-0 mt-0.5";
+        iconBoxEl.innerHTML = `<svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>`;
+        badgeEl.className = "inline-block px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold uppercase tracking-wider bg-navy-800 text-slate-300 mb-1.5";
+        badgeEl.textContent = "SCANNING";
+        titleEl.textContent = "No Clear Signal";
+        subtitleEl.textContent = "Hold hand gesture steady within the camera frame.";
+        confEl.className = "font-mono font-bold text-2xl sm:text-3xl text-slate-400";
+        confEl.textContent = `${Math.max(0, topScore * 100).toFixed(1)}%`;
+      }
+    }
+
+    /**
+     * Append Timestamped Entry to Signal Detection Event Log
+     */
+    function appendEventLog(tag, message, textColorClass = "text-slate-300") {
+      const logList = document.getElementById("event-log-list");
+      if (!logList) return;
+
+      const timeStr = new Date().toLocaleTimeString([], { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      const row = document.createElement("div");
+      row.className = `flex items-center justify-between gap-2 ${textColorClass}`;
+      row.innerHTML = `<span class="truncate">[${tag}] ${message}</span><span class="text-slate-500 shrink-0">${timeStr}</span>`;
+      logList.prepend(row);
+
+      while (logList.children.length > 25) {
+        logList.removeChild(logList.lastChild);
+      }
+    }
+
+    function clearEventLog() {
+      const logList = document.getElementById("event-log-list");
+      if (logList) {
+        logList.innerHTML = `<div class="text-slate-500 flex items-center justify-between"><span>[SYSTEM] Event log cleared.</span><span>READY</span></div>`;
+      }
+      lastLoggedSignal = null;
+    }
+
+    /**
+     * Reset Telemetry Panel to Standby
+     */
+    function resetTelemetryUI() {
+      Object.keys(CLASS_CONFIG).forEach(className => {
+        document.getElementById(`prob-bar-${className}`).style.width = "0%";
+        document.getElementById(`prob-text-${className}`).textContent = "0.0%";
+        const cardEl = document.getElementById(`gesture-card-${className}`);
+        const cardStatusEl = document.getElementById(`card-status-${className}`);
+        const cardBadgeEl = document.getElementById(`card-badge-${className}`);
+        const cfg = CLASS_CONFIG[className];
+        cardEl.classList.remove("card-active-red", "card-active-orange", "card-active-green");
+        cardStatusEl.textContent = "STANDBY";
+        cardStatusEl.className = "text-slate-500";
+        cardBadgeEl.textContent = cfg.defaultCardBadge;
+        if (cfg.theme === "red") {
+          cardBadgeEl.className = "px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-red-500/15 text-red-400 border border-red-500/30";
+        } else if (cfg.theme === "orange") {
+          cardBadgeEl.className = "px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-amber-500/15 text-amber-400 border border-amber-500/30";
+        } else {
+          cardBadgeEl.className = "px-2.5 py-1 rounded-full text-[11px] font-mono font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30";
+        }
+      });
+
+      const bannerEl = document.getElementById("dominant-banner");
+      bannerEl.className = "rounded-2xl p-5 bg-navy-900 border border-slate-700/80 transition-all duration-300";
+      document.getElementById("dominant-badge").className = "inline-block px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold uppercase tracking-wider bg-navy-800 text-slate-300 mb-1.5";
+      document.getElementById("dominant-badge").textContent = "STANDBY";
+      document.getElementById("dominant-title").textContent = "Awaiting Input";
+      document.getElementById("dominant-subtitle").textContent = "Activate webcam or upload an image to analyze hand signals.";
+      document.getElementById("dominant-confidence").className = "font-mono font-bold text-2xl sm:text-3xl text-slate-300";
+      document.getElementById("dominant-confidence").textContent = "0.0%";
+    }
+
+    /**
+     * Manual Trigger / Fallback Simulation Helper
+     */
+    function simulatePrediction(targetClass) {
+      const mockScores = {
+        HELP: 0.02,
+        STOP: 0.02,
+        ATTENTION: 0.02,
+        SAFE: 0.02
+      };
+      mockScores[targetClass] = 0.94;
+      updateTelemetryUI(mockScores);
+    }
+
+    function runSimulatedInference() {
+      const t = Date.now() / 2000;
+      const scores = {
+        HELP: 0.12 + 0.05 * Math.sin(t),
+        STOP: 0.11 + 0.05 * Math.cos(t + 1),
+        ATTENTION: 0.14 + 0.05 * Math.cos(t),
+        SAFE: 0.18 + 0.05 * Math.sin(t + 1)
+      };
+      updateTelemetryUI(scores);
+    }
+
+    // Load Teachable Machine Model on Page Load
+    window.addEventListener("DOMContentLoaded", () => {
+      initTeachableMachineModel();
+    });
+  </script>
+</body>
+</html>
